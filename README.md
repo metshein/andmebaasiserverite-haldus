@@ -47,15 +47,3 @@ chmod +x *.sh
 ```bash
 git pull
 ```
-
-## Task 1 kontrollib
-
-1. Linuxi paigalduskeskkonna valik + ligipaasu kirjeldus dokumentatsioonis.  
-2. MariaDB paigaldus, versioon, autostarti info.  
-3. Esmase turvaseadistuse tulemused (anon users, test DB, root remote, unix_socket valik).  
-4. Konfi read: `bind-address`, `local-infile`, `skip-name-resolve` (+ dokumenteerimine).  
-5. Teenuse/portide kontroll + `SHOW VARIABLES LIKE 'bind_address';` + dokumenteeritud tulemus.
-
-## Dokumentatsiooni nipp
-
-Pane tõendus (käsud, väljundid, tähelepanekud) README-sse või eraldi dokumentatsioonifaili.
