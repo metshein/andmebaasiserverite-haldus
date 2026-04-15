@@ -26,8 +26,8 @@ sudo pacman -S git
 ## Samm 2: Lae alla skriptid
 
 ```bash
-git clone https://github.com/metshein/andmebaasiserverite-haldus
-cd andmebaasiserverite-haldus
+git clone https://github.com/metshein/andmebaasiserverite-haldus dbhaldus
+cd dbhaldus
 ```
 
 ## Samm 3: Anna kaivitusoigused
