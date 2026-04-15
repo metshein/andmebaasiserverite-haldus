@@ -9,7 +9,7 @@ Tulemused kuvatakse lehel: [https://metshein.com/skripti_kontroll/db-admin.php](
 git --version
 ```
 
-Kui kasku ei leitud, paigalda Git:
+Kui käsku ei leitud, paigalda Git:
 
 ```bash
 # Ubuntu / Debian / Raspberry Pi OS
@@ -30,13 +30,13 @@ git clone https://github.com/metshein/andmebaasiserverite-haldus dbhaldus
 cd dbhaldus
 ```
 
-## Samm 3: Anna kaivitusoigused
+## Samm 3: Anna käivitusõigused
 
 ```bash
 chmod +x *.sh
 ```
 
-## Samm 4: Kaivita esimene kontroll
+## Samm 4: Käivita esimene kontroll
 
 ```bash
 ./task01-check.sh
