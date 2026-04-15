@@ -36,23 +36,13 @@ cd dbhaldus
 chmod +x *.sh
 ```
 
-## Samm 4: Loo dokumentatsioonifail
-
-Loo fail samas kaustas:
-
-```bash
-nano dokumentatsioon.md
-```
-
-Sinna peavad minema sinu sammud, kasutatud käsud ja tulemused.
-
-## Samm 5: Kaivita esimene kontroll
+## Samm 4: Kaivita esimene kontroll
 
 ```bash
 ./task01-check.sh
 ```
 
-## Samm 6: Uuenda vajadusel skripte
+## Samm 5: Uuenda vajadusel skripte
 
 ```bash
 git pull
@@ -68,4 +58,4 @@ git pull
 
 ## Dokumentatsiooni nipp
 
-Mida konkreetsemad kaesud ja vaartused sa kirjutad, seda lihtsam on kontroll skriptiga labi saada.
+Pane tõendus (käsud, väljundid, tähelepanekud) README-sse või eraldi dokumentatsioonifaili.
