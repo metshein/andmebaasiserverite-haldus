@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 
 DOC_FILE=""
-for candidate in "dokumentatsioon.md" "dokumentatsioon.txt" "documentation.md" "documentation.txt"; do
+for candidate in "dokumentatsioon.md" "dokumentatsioon.txt" "documentation.md" "documentation.txt" "README.md"; do
     if [[ -f "$candidate" ]]; then
         DOC_FILE="$candidate"
         break
@@ -13,7 +13,7 @@ for candidate in "dokumentatsioon.md" "dokumentatsioon.txt" "documentation.md" "
 done
 
 if [[ -z "$DOC_FILE" ]]; then
-    echo "FAIL: Dokumentatsiooni faili ei leitud (oota: dokumentatsioon.md / documentation.md)."
+    echo "FAIL: Dokumentatsiooni faili ei leitud (nt README.md / dokumentatsioon.md / documentation.md)."
     exit 1
 fi
 
