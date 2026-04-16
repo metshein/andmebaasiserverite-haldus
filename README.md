@@ -1,7 +1,7 @@
 # Andmebaasiserverite haldus - automaatne kontroll
 
 Tegemist on kursuse **Andmebaasiserverite haldus** automaatkontrolli ja hindamise skriptidega.  
-Tulemused kuvatakse lehel: [https://metshein.com/skripti_kontroll/db-admin.php](https://metshein.com/skripti_kontroll/db-admin.php)
+Tulemused kuvatakse lehel: [http://localhost/skripti_kontroll/db-admin.php](http://localhost/skripti_kontroll/db-admin.php)
 
 ## Samm 1: Kontrolli Git olemasolu
 
