@@ -95,6 +95,13 @@ require_token_in_csv() {
     echo "$csv_upper" | tr -d ' ' | grep -Eq "(^|,)$token(,|$)"
 }
 
+grants_has_default_role() {
+    local grants_text="$1"
+    local role_name="$2"
+    echo "$grants_text" | grep -Fqi "SET DEFAULT ROLE \\`$role_name\\`" || \
+    echo "$grants_text" | grep -Fqi "SET DEFAULT ROLE $role_name"
+}
+
 if ! command -v mariadb >/dev/null 2>&1; then
     echo -e "${RED}VIGA:${NC} MariaDB kaasku ei leitud (mariadb puudub PATH-is)."
     exit 1
@@ -232,7 +239,7 @@ fi
 has_is_role="$(run_sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='mysql' AND TABLE_NAME='user' AND COLUMN_NAME='is_role';" || echo "0")"
 
 if [[ "$has_is_role" -gt 0 ]]; then
-    ro_users_count="$(run_sql "SELECT COUNT(DISTINCT principal) FROM (SELECT t.GRANTEE AS principal FROM information_schema.TABLE_PRIVILEGES t JOIN mysql.user u ON t.GRANTEE = CONCAT(\"'\",u.User,\"'@'\",u.Host,\"'\") WHERE t.TABLE_SCHEMA='lab_users' AND t.TABLE_NAME='actions' AND u.is_role<>'Y' GROUP BY t.GRANTEE HAVING MAX(t.PRIVILEGE_TYPE='SELECT')=1 AND MAX(t.PRIVILEGE_TYPE='INSERT')=0 AND MAX(t.PRIVILEGE_TYPE='UPDATE')=0 AND MAX(t.PRIVILEGE_TYPE='DELETE')=0 UNION SELECT CONCAT(\"'\",rm.User,\"'@'\",rm.Host,\"'\") AS principal FROM mysql.roles_mapping rm JOIN (SELECT u.User AS role_name FROM (SELECT t.GRANTEE, MAX(t.PRIVILEGE_TYPE='SELECT') sel, MAX(t.PRIVILEGE_TYPE='INSERT') ins, MAX(t.PRIVILEGE_TYPE='UPDATE') upd, MAX(t.PRIVILEGE_TYPE='DELETE') del FROM information_schema.TABLE_PRIVILEGES t JOIN mysql.user u ON t.GRANTEE = CONCAT(\"'\",u.User,\"'@'\",u.Host,\"'\") WHERE t.TABLE_SCHEMA='lab_users' AND t.TABLE_NAME='actions' AND u.is_role='Y' GROUP BY t.GRANTEE) r JOIN mysql.user u ON r.GRANTEE = CONCAT(\"'\",u.User,\"'@'\",u.Host,\"'\") WHERE r.sel=1 AND r.ins=0 AND r.upd=0 AND r.del=0) rr ON rr.role_name = rm.Role) all_principals;" || echo "0")"
+    ro_users_count="$(run_sql "SELECT COUNT(DISTINCT principal) FROM (SELECT t.GRANTEE AS principal FROM information_schema.TABLE_PRIVILEGES t JOIN mysql.user u ON t.GRANTEE = CONCAT(\"'\",u.User,\"'@'\",u.Host,\"'\") WHERE t.TABLE_SCHEMA='lab_users' AND t.TABLE_NAME='actions' AND u.is_role<>'Y' AND u.User NOT IN ('root','mysql','mariadb.sys') GROUP BY t.GRANTEE HAVING MAX(t.PRIVILEGE_TYPE='SELECT')=1 AND MAX(t.PRIVILEGE_TYPE='INSERT')=0 AND MAX(t.PRIVILEGE_TYPE='UPDATE')=0 AND MAX(t.PRIVILEGE_TYPE='DELETE')=0 UNION SELECT CONCAT(\"'\",rm.User,\"'@'\",rm.Host,\"'\") AS principal FROM mysql.roles_mapping rm JOIN mysql.user uu ON uu.User=rm.User AND uu.Host=rm.Host JOIN (SELECT u.User AS role_name FROM (SELECT t.GRANTEE, MAX(t.PRIVILEGE_TYPE='SELECT') sel, MAX(t.PRIVILEGE_TYPE='INSERT') ins, MAX(t.PRIVILEGE_TYPE='UPDATE') upd, MAX(t.PRIVILEGE_TYPE='DELETE') del FROM information_schema.TABLE_PRIVILEGES t JOIN mysql.user u ON t.GRANTEE = CONCAT(\"'\",u.User,\"'@'\",u.Host,\"'\") WHERE t.TABLE_SCHEMA='lab_users' AND t.TABLE_NAME='actions' AND u.is_role='Y' GROUP BY t.GRANTEE) r JOIN mysql.user u ON r.GRANTEE = CONCAT(\"'\",u.User,\"'@'\",u.Host,\"'\") WHERE r.sel=1 AND r.ins=0 AND r.upd=0 AND r.del=0) rr ON rr.role_name = rm.Role WHERE uu.is_role<>'Y' AND uu.User NOT IN ('root','mysql','mariadb.sys')) all_principals;" || echo "0")"
 else
     ro_users_count="$(run_sql "SELECT COUNT(*) FROM (SELECT GRANTEE, MAX(PRIVILEGE_TYPE='SELECT') sel, MAX(PRIVILEGE_TYPE='INSERT') ins, MAX(PRIVILEGE_TYPE='UPDATE') upd, MAX(PRIVILEGE_TYPE='DELETE') del FROM information_schema.TABLE_PRIVILEGES WHERE TABLE_SCHEMA='lab_users' AND TABLE_NAME='actions' GROUP BY GRANTEE) x WHERE sel=1 AND ins=0 AND upd=0 AND del=0;" || echo "0")"
 fi
@@ -260,8 +267,8 @@ if [[ "$has_is_role" -gt 0 ]]; then
     fi
 
     if [[ -n "$reader_role_name" ]]; then
-        reader_user="$(run_sql "SELECT User FROM mysql.roles_mapping WHERE Role='$reader_role_name' LIMIT 1;" || true)"
-        reader_host="$(run_sql "SELECT Host FROM mysql.roles_mapping WHERE Role='$reader_role_name' LIMIT 1;" || true)"
+        reader_user="$(run_sql "SELECT rm.User FROM mysql.roles_mapping rm JOIN mysql.user u ON u.User=rm.User AND u.Host=rm.Host WHERE rm.Role='$reader_role_name' AND u.is_role<>'Y' AND u.User NOT IN ('root','mysql','mariadb.sys') LIMIT 1;" || true)"
+        reader_host="$(run_sql "SELECT rm.Host FROM mysql.roles_mapping rm JOIN mysql.user u ON u.User=rm.User AND u.Host=rm.Host WHERE rm.Role='$reader_role_name' AND u.is_role<>'Y' AND u.User NOT IN ('root','mysql','mariadb.sys') LIMIT 1;" || true)"
         if [[ -z "$reader_user" || -z "$reader_host" ]]; then
             fail "Lugeja roll ei ole seotud yhegi kasutajaga."
         else
@@ -274,7 +281,7 @@ if [[ "$has_is_role" -gt 0 ]]; then
             fi
 
             default_grants="$(run_sql "SHOW GRANTS FOR '$reader_user'@'$reader_host';" || true)"
-            if echo "$default_grants" | grep -Eqi "SET DEFAULT ROLE.+$reader_role_name"; then
+            if grants_has_default_role "$default_grants" "$reader_role_name"; then
                 ok "Lugeja roll on vaikimisi aktiivne kasutajal $reader_user@$reader_host."
             else
                 fail "Lugeja roll ei paista olevat vaikimisi aktiivne kasutajal $reader_user@$reader_host."
@@ -283,8 +290,8 @@ if [[ "$has_is_role" -gt 0 ]]; then
     fi
 
     if [[ -n "$poster_role_name" ]]; then
-        poster_user="$(run_sql "SELECT User FROM mysql.roles_mapping WHERE Role='$poster_role_name' LIMIT 1;" || true)"
-        poster_host="$(run_sql "SELECT Host FROM mysql.roles_mapping WHERE Role='$poster_role_name' LIMIT 1;" || true)"
+        poster_user="$(run_sql "SELECT rm.User FROM mysql.roles_mapping rm JOIN mysql.user u ON u.User=rm.User AND u.Host=rm.Host WHERE rm.Role='$poster_role_name' AND u.is_role<>'Y' AND u.User NOT IN ('root','mysql','mariadb.sys') LIMIT 1;" || true)"
+        poster_host="$(run_sql "SELECT rm.Host FROM mysql.roles_mapping rm JOIN mysql.user u ON u.User=rm.User AND u.Host=rm.Host WHERE rm.Role='$poster_role_name' AND u.is_role<>'Y' AND u.User NOT IN ('root','mysql','mariadb.sys') LIMIT 1;" || true)"
         if [[ -z "$poster_user" || -z "$poster_host" ]]; then
             fail "Postitaja roll ei ole seotud yhegi kasutajaga."
         else
@@ -297,7 +304,7 @@ if [[ "$has_is_role" -gt 0 ]]; then
             fi
 
             default_grants="$(run_sql "SHOW GRANTS FOR '$poster_user'@'$poster_host';" || true)"
-            if echo "$default_grants" | grep -Eqi "SET DEFAULT ROLE.+$poster_role_name"; then
+            if grants_has_default_role "$default_grants" "$poster_role_name"; then
                 ok "Postitaja roll on vaikimisi aktiivne kasutajal $poster_user@$poster_host."
             else
                 fail "Postitaja roll ei paista olevat vaikimisi aktiivne kasutajal $poster_user@$poster_host."
