@@ -42,13 +42,7 @@ chmod +x *.sh
 ./task01-check.sh
 ```
 
-Kui jooksutad kontrolli teisest masinast (nt Raspberry Pi), sea endpoint faili `server.conf` (skript loeb selle automaatselt):
-
-```bash
-http://YOUR_PC_IP/skripti_kontroll/api/db-submit.php
-```
-
-Alternatiivina saad URL-i anda jooksvalt:
+Kui jooksutad kontrolli teisest masinast (nt Raspberry Pi), kasuta SERVER_URL keskkonnamuutujat:
 
 ```bash
 SERVER_URL="http://YOUR_PC_IP/skripti_kontroll/api/db-submit.php" ./task01-check.sh
