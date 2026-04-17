@@ -98,8 +98,13 @@ require_token_in_csv() {
 grants_has_default_role() {
     local grants_text="$1"
     local role_name="$2"
-    echo "$grants_text" | grep -Fqi "SET DEFAULT ROLE \\`$role_name\\`" || \
-    echo "$grants_text" | grep -Fqi "SET DEFAULT ROLE $role_name"
+    local normalized_grants
+    local normalized_role
+
+    normalized_grants="$(echo "$grants_text" | tr -d '\`' | tr '[:upper:]' '[:lower:]')"
+    normalized_role="$(echo "$role_name" | tr '[:upper:]' '[:lower:]')"
+
+    echo "$normalized_grants" | grep -Fq "set default role $normalized_role"
 }
 
 if ! command -v mariadb >/dev/null 2>&1; then
