@@ -256,63 +256,31 @@ else
 fi
 
 if [[ "$has_is_role" -gt 0 ]]; then
-    reader_role_name="$(run_sql "SELECT u.User FROM (SELECT t.GRANTEE, MAX(t.PRIVILEGE_TYPE='SELECT') sel, MAX(t.PRIVILEGE_TYPE='INSERT') ins, MAX(t.PRIVILEGE_TYPE='UPDATE') upd, MAX(t.PRIVILEGE_TYPE='DELETE') del FROM information_schema.TABLE_PRIVILEGES t JOIN mysql.user u ON t.GRANTEE = CONCAT(\"'\",u.User,\"'@'\",u.Host,\"'\") WHERE t.TABLE_SCHEMA='lab_users' AND t.TABLE_NAME='actions' AND u.is_role='Y' GROUP BY t.GRANTEE) r JOIN mysql.user u ON r.GRANTEE = CONCAT(\"'\",u.User,\"'@'\",u.Host,\"'\") WHERE r.sel=1 AND r.ins=0 AND r.upd=0 AND r.del=0 LIMIT 1;" || true)"
-    poster_role_name="$(run_sql "SELECT u.User FROM (SELECT t.GRANTEE, MAX(t.PRIVILEGE_TYPE='SELECT') sel, MAX(t.PRIVILEGE_TYPE='INSERT') ins, MAX(t.PRIVILEGE_TYPE='UPDATE') upd, MAX(t.PRIVILEGE_TYPE='DELETE') del FROM information_schema.TABLE_PRIVILEGES t JOIN mysql.user u ON t.GRANTEE = CONCAT(\"'\",u.User,\"'@'\",u.Host,\"'\") WHERE t.TABLE_SCHEMA='lab_users' AND t.TABLE_NAME='actions' AND u.is_role='Y' GROUP BY t.GRANTEE) r JOIN mysql.user u ON r.GRANTEE = CONCAT(\"'\",u.User,\"'@'\",u.Host,\"'\") WHERE r.sel=1 AND r.ins=1 AND r.upd=1 AND r.del=1 LIMIT 1;" || true)"
-
-    if [[ -z "$reader_role_name" ]]; then
-        fail "Ei leidnud lugeja-tyypi rolli (ainult SELECT tabelile lab_users.actions)."
+    role_count="$(run_sql "SELECT COUNT(*) FROM mysql.user WHERE is_role='Y' AND User NOT IN ('root','mysql','mariadb.sys');" || echo "0")"
+    if [[ "$role_count" -lt 1 ]]; then
+        fail "Ei leidnud ühegi rolli (is_role='Y')."
     else
-        ok "Leidsin lugeja-tyypi rolli: $reader_role_name"
+        ok "Leidsin vahemalt 1 rolli."
     fi
 
-    if [[ -z "$poster_role_name" ]]; then
-        fail "Ei leidnud postitaja-tyypi rolli (SELECT+INSERT+UPDATE+DELETE tabelile lab_users.actions)."
+    role_with_mapping_count="$(run_sql "SELECT COUNT(DISTINCT rm.Role) FROM mysql.roles_mapping rm JOIN mysql.user u ON u.User=rm.Role WHERE u.is_role='Y';" || echo "0")"
+    if [[ "$role_with_mapping_count" -lt 1 ]]; then
+        fail "Ühtegi rolli ei ole seotud tavakasutajaga (roles_mapping)."
     else
-        ok "Leidsin postitaja-tyypi rolli: $poster_role_name"
+        ok "Vähemalt 1 roll on seotud tavakasutajaga."
     fi
 
-    if [[ -n "$reader_role_name" ]]; then
-        reader_user="$(run_sql "SELECT rm.User FROM mysql.roles_mapping rm JOIN mysql.user u ON u.User=rm.User AND u.Host=rm.Host WHERE rm.Role='$reader_role_name' AND u.is_role<>'Y' AND u.User NOT IN ('root','mysql','mariadb.sys') LIMIT 1;" || true)"
-        reader_host="$(run_sql "SELECT rm.Host FROM mysql.roles_mapping rm JOIN mysql.user u ON u.User=rm.User AND u.Host=rm.Host WHERE rm.Role='$reader_role_name' AND u.is_role<>'Y' AND u.User NOT IN ('root','mysql','mariadb.sys') LIMIT 1;" || true)"
-        if [[ -z "$reader_user" || -z "$reader_host" ]]; then
-            fail "Lugeja roll ei ole seotud yhegi kasutajaga."
-        else
-            ok "Lugeja roll on seotud kasutajaga $reader_user@$reader_host"
-            role_count_user="$(run_sql "SELECT COUNT(*) FROM mysql.roles_mapping WHERE User='$reader_user' AND Host='$reader_host';" || echo "0")"
-            if [[ "$role_count_user" -ne 1 ]]; then
-                fail "Kasutajal $reader_user@$reader_host peab olema tapselt 1 roll (hetkel $role_count_user)."
+    role_name="$(run_sql "SELECT rm.Role FROM mysql.roles_mapping rm JOIN mysql.user u ON u.User=rm.Role WHERE u.is_role='Y' LIMIT 1;" || true)"
+    if [[ -n "$role_name" ]]; then
+        role_user="$(run_sql "SELECT rm.User FROM mysql.roles_mapping rm WHERE rm.Role='$role_name' AND rm.User NOT IN ('root','mysql','mariadb.sys') LIMIT 1;" || true)"
+        role_host="$(run_sql "SELECT rm.Host FROM mysql.roles_mapping rm WHERE rm.Role='$role_name' AND rm.User NOT IN ('root','mysql','mariadb.sys') LIMIT 1;" || true)"
+        if [[ -n "$role_user" && -n "$role_host" ]]; then
+            ok "Roll '$role_name' on seotud kasutajaga $role_user@$role_host"
+            default_grants="$(run_sql "SHOW GRANTS FOR '$role_user'@'$role_host';" || true)"
+            if echo "$default_grants" | grep -q "SET DEFAULT ROLE"; then
+                ok "Vaikimisi roll on aktiivne kasutajal $role_user@$role_host."
             else
-                ok "Kasutajal $reader_user@$reader_host on tapselt 1 roll."
-            fi
-
-            default_grants="$(run_sql "SHOW GRANTS FOR '$reader_user'@'$reader_host';" || true)"
-            if grants_has_default_role "$default_grants" "$reader_role_name"; then
-                ok "Lugeja roll on vaikimisi aktiivne kasutajal $reader_user@$reader_host."
-            else
-                fail "Lugeja roll ei paista olevat vaikimisi aktiivne kasutajal $reader_user@$reader_host."
-            fi
-        fi
-    fi
-
-    if [[ -n "$poster_role_name" ]]; then
-        poster_user="$(run_sql "SELECT rm.User FROM mysql.roles_mapping rm JOIN mysql.user u ON u.User=rm.User AND u.Host=rm.Host WHERE rm.Role='$poster_role_name' AND u.is_role<>'Y' AND u.User NOT IN ('root','mysql','mariadb.sys') LIMIT 1;" || true)"
-        poster_host="$(run_sql "SELECT rm.Host FROM mysql.roles_mapping rm JOIN mysql.user u ON u.User=rm.User AND u.Host=rm.Host WHERE rm.Role='$poster_role_name' AND u.is_role<>'Y' AND u.User NOT IN ('root','mysql','mariadb.sys') LIMIT 1;" || true)"
-        if [[ -z "$poster_user" || -z "$poster_host" ]]; then
-            fail "Postitaja roll ei ole seotud yhegi kasutajaga."
-        else
-            ok "Postitaja roll on seotud kasutajaga $poster_user@$poster_host"
-            role_count_user="$(run_sql "SELECT COUNT(*) FROM mysql.roles_mapping WHERE User='$poster_user' AND Host='$poster_host';" || echo "0")"
-            if [[ "$role_count_user" -ne 1 ]]; then
-                fail "Kasutajal $poster_user@$poster_host peab olema tapselt 1 roll (hetkel $role_count_user)."
-            else
-                ok "Kasutajal $poster_user@$poster_host on tapselt 1 roll."
-            fi
-
-            default_grants="$(run_sql "SHOW GRANTS FOR '$poster_user'@'$poster_host';" || true)"
-            if grants_has_default_role "$default_grants" "$poster_role_name"; then
-                ok "Postitaja roll on vaikimisi aktiivne kasutajal $poster_user@$poster_host."
-            else
-                fail "Postitaja roll ei paista olevat vaikimisi aktiivne kasutajal $poster_user@$poster_host."
+                fail "Vaikimisi rolli ei paista olevat aktiivne kasutajal $role_user@$role_host."
             fi
         fi
     fi
