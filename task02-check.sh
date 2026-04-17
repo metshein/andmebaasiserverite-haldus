@@ -31,18 +31,51 @@ fail() {
 
 run_sql() {
     local sql="$1"
-    if sudo -n true >/dev/null 2>&1; then
-        sudo mariadb -N -B -u root -e "$sql" 2>/dev/null && return 0
+    local -a cmd=(mariadb -N -B)
+
+    if [[ -n "${DB_HOST:-}" ]]; then
+        cmd+=(-h "$DB_HOST")
     fi
-    mariadb -N -B -u root -e "$sql" 2>/dev/null
+    if [[ -n "${DB_PORT:-}" ]]; then
+        cmd+=(-P "$DB_PORT")
+    fi
+    if [[ -n "${DB_USER:-}" ]]; then
+        cmd+=(-u "$DB_USER")
+    fi
+    if [[ -n "${DB_PASS:-}" ]]; then
+        cmd+=(-p"$DB_PASS")
+    fi
+    cmd+=(-e "$sql")
+
+    if [[ "${DB_USE_SUDO:-auto}" == "always" ]] || { [[ "${DB_USE_SUDO:-auto}" == "auto" ]] && [[ -z "${DB_USER:-}" ]] && sudo -n true >/dev/null 2>&1; }; then
+        sudo "${cmd[@]}" 2>/dev/null
+    else
+        "${cmd[@]}" 2>/dev/null
+    fi
 }
 
 run_sql_raw() {
     local sql="$1"
-    if sudo -n true >/dev/null 2>&1; then
-        sudo mariadb -N -B -u root -e "$sql"
+    local -a cmd=(mariadb -N -B)
+
+    if [[ -n "${DB_HOST:-}" ]]; then
+        cmd+=(-h "$DB_HOST")
+    fi
+    if [[ -n "${DB_PORT:-}" ]]; then
+        cmd+=(-P "$DB_PORT")
+    fi
+    if [[ -n "${DB_USER:-}" ]]; then
+        cmd+=(-u "$DB_USER")
+    fi
+    if [[ -n "${DB_PASS:-}" ]]; then
+        cmd+=(-p"$DB_PASS")
+    fi
+    cmd+=(-e "$sql")
+
+    if [[ "${DB_USE_SUDO:-auto}" == "always" ]] || { [[ "${DB_USE_SUDO:-auto}" == "auto" ]] && [[ -z "${DB_USER:-}" ]] && sudo -n true >/dev/null 2>&1; }; then
+        sudo "${cmd[@]}"
     else
-        mariadb -N -B -u root -e "$sql"
+        "${cmd[@]}"
     fi
 }
 
@@ -68,7 +101,8 @@ if ! command -v mariadb >/dev/null 2>&1; then
 fi
 
 if ! run_sql "SELECT 1;" >/dev/null; then
-    echo -e "${RED}VIGA:${NC} MariaDB uhendus root kasutajaga ebaonnestus."
+    echo -e "${RED}VIGA:${NC} MariaDB uhendus ebaonnestus."
+    echo "Vihje: kasuta DB_USER/DB_PASS (ja soovi korral DB_HOST/DB_PORT) voi luba sudo mariadb."
     exit 1
 fi
 
