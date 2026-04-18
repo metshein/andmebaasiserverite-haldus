@@ -146,34 +146,34 @@ else
     fi
 fi
 
-info "4) Kontrollin fuussilist varukoopiaga..."
+info "4) Kontrollin füüsilist varukoopiaga..."
 
 physical_backup_dir="/tmp/physical_backup"
 if [[ ! -d "$physical_backup_dir" ]]; then
-    fail "Fuussilise varukoopiaga katagoogi $physical_backup_dir ei leitud. Kas tegite 'mariadb-backup --backup --target-dir=/tmp/physical_backup'?"
+    fail "Füüsilise varukoopiaga kataloogi $physical_backup_dir ei leitud. Kas tegite 'mariadb-backup --backup --target-dir=/tmp/physical_backup'?"
 else
-    ok "Fuussilise varukoopiaga kataloog $physical_backup_dir eksisteerib."
+    ok "Füüsilise varukoopiaga kataloog $physical_backup_dir eksisteerib."
 
     if [[ ! -f "$physical_backup_dir/backup-my.cnf" ]]; then
-        fail "Fuussilises varukoopiyas puudub backup-my.cnf fail."
+        fail "Füüsilises varukoopiyas puudub backup-my.cnf fail."
     else
-        ok "Fuussilises varukoopiyas leidub backup-my.cnf fail."
+        ok "Füüsilises varukoopiyas leidub backup-my.cnf fail."
     fi
 
     if [[ ! -f "$physical_backup_dir/xtrabackup_info" ]]; then
-        warn "Fuussilises varukoopiyas puudub xtrabackup_info fail (voi tegemist on erinevate varundus toolidega)."
+        warn "Füüsilises varukoopiyas puudub xtrabackup_info fail (voi tegemist on erinevate varundus toolidega)."
     else
-        ok "Fuussilises varukoopiyas leidub xtrabackup_info fail."
+        ok "Füüsilises varukoopiyas leidub xtrabackup_info fail."
     fi
 
     if [[ ! -d "$physical_backup_dir/backup_lab" ]]; then
-        fail "Fuussilises varukoopiyas puudub backup_lab andmebaasi katagoogi."
+        fail "Füüsilises varukoopiyas puudub backup_lab andmebaasi kataloogi."
     else
-        ok "Fuussilises varukoopiyas leidub backup_lab kataloogi."
+        ok "Füüsilises varukoopiyas leidub backup_lab kataloogi."
     fi
 fi
 
-info "5) Kontrollin varunduskasutajat (fuussilisele varundusele)..."
+info "5) Kontrollin varunduskasutajat (füüsilisele varundusele)..."
 
 backup_user_exists="$(run_sql "SELECT COUNT(*) FROM mysql.user WHERE User='mariadb_backup';" || echo "0")"
 if [[ "$backup_user_exists" -gt 0 ]]; then
@@ -202,11 +202,11 @@ fi
 info "6) Kokkuvote varundamisest..."
 
 if [[ -f "$logical_backup_file" ]] && [[ -d "$physical_backup_dir" ]]; then
-    ok "Nii loogiline kui ka fuusiline varukoopia on tehtud."
+    ok "Nii loogiline kui ka füüsiline varukoopia on tehtud."
 elif [[ -f "$logical_backup_file" ]]; then
-    warn "Ainult loogiline varukoopia on tehtud. Fuusiline varukoopia puudub."
+    warn "Ainult loogiline varukoopia on tehtud. Füüsiline varukoopia puudub."
 elif [[ -d "$physical_backup_dir" ]]; then
-    warn "Ainult fuusiline varukoopia on tehtud. Loogiline varukoopia puudub."
+    warn "Ainult füüsiline varukoopia on tehtud. Loogiline varukoopia puudub."
 else
     fail "Kumbki varukoopia ei ole tehtud."
 fi
