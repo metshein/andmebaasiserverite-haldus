@@ -150,7 +150,7 @@ else
     if grep -q "DROP TABLE.*customers" "$logical_backup_file"; then
         ok "Loogilises varukoopias leidub DROP TABLE lause."
     else
-        warn "Loogilises varukoopias ei leidunud DROP TABLE lauset."
+        fail "Loogilises varukoopias ei leidunud DROP TABLE lauset. Ülesanne nõuab, et kustutad tabeli taastamise harjutamiseks."
     fi
 
     if grep -q "INSERT INTO.*customers" "$logical_backup_file"; then
