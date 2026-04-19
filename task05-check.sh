@@ -59,11 +59,11 @@ run_sql() {
 history_has() {
     local pattern="$1"
 
-    if [[ -f "$bash_history_file" ]] && grep -Eiq "$pattern" "$bash_history_file"; then
+    if [[ -f "$bash_history_file" ]] && tr -d '`' < "$bash_history_file" | grep -Eiq "$pattern"; then
         return 0
     fi
 
-    if [[ -f "$mysql_history_file" ]] && grep -Eiq "$pattern" "$mysql_history_file"; then
+    if [[ -f "$mysql_history_file" ]] && tr -d '`' < "$mysql_history_file" | grep -Eiq "$pattern"; then
         return 0
     fi
 
@@ -103,7 +103,7 @@ fi
 
 ok "Kasutan andmebaasi $target_schema ja tabelit $target_table."
 
-info "1) Kontrollin CHECK TABLE käskude kasutust..."
+info "1-2) Kontrollin CHECK TABLE käskude kasutust..."
 
 mapfile -t db_tables < <(run_sql "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='$target_schema' ORDER BY TABLE_NAME;" || true)
 
@@ -114,7 +114,7 @@ else
     missing_tables=()
 
     for t in "${db_tables[@]}"; do
-        if history_has "CHECK[[:space:]]+TABLE[[:space:]]+(`?$target_schema`?\\.)?`?$t`?"; then
+        if history_has "CHECK[[:space:]]+TABLE[[:space:]]+($target_schema\\.)?$t([[:space:];]|$)"; then
             check_cmd_hits=$((check_cmd_hits + 1))
         else
             missing_tables+=("$t")
@@ -127,13 +127,6 @@ else
         fail "CHECK TABLE käsku ei leitud kõigi tabelite jaoks eraldi ($check_cmd_hits/${#db_tables[@]})."
         warn "Puuduvad CHECK TABLE tõendid tabelitele: ${missing_tables[*]}"
     fi
-fi
-
-info "2) Hinnangu kontroll (tehniline tõend)..."
-if history_has 'CHECK[[:space:]]+TABLE'; then
-    ok "Käsuajaloos leidub CHECK TABLE kasutust."
-else
-    fail "Käsuajaloos ei leitud CHECK TABLE käsku. Käivita vajalikud CHECK TABLE käsud ja seejärel history -a"
 fi
 
 info "3) Kontrollin arhiveerimist (esimesed 50 000 kirjet)..."
