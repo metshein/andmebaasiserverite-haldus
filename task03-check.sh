@@ -175,9 +175,15 @@ else
     fi
 
     if [[ ! -f "$physical_backup_dir/xtrabackup_info" ]]; then
-        warn "Füüsilises varukoopias puudub xtrabackup_info fail (või tegemist on erinevate varundustööriistadega)."
+        fail "Füüsilises varukoopias puudub xtrabackup_info fail. Ülesandes on nõutud mariadb-backup kasutamine."
     else
         ok "Füüsilises varukoopias leidub xtrabackup_info fail."
+    fi
+
+    if [[ ! -f "$physical_backup_dir/xtrabackup_checkpoints" ]]; then
+        fail "Füüsilises varukoopias puudub xtrabackup_checkpoints fail. See viitab, et mariadb-backup varukoopia ei ole korrektne."
+    else
+        ok "Füüsilises varukoopias leidub xtrabackup_checkpoints fail."
     fi
 
     if [[ ! -d "$physical_backup_dir/backup_lab" ]]; then
