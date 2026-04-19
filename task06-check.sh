@@ -33,23 +33,44 @@ info "1) Kontrollin Apache olemasolu..."
 
 apache_found=0
 apache_version=""
+apache_detect_note=""
 
 if command -v apache2 >/dev/null 2>&1; then
-    apache_found=1
     apache_version="$(apache2 -v 2>/dev/null | head -n1 || true)"
+    if echo "$apache_version" | grep -Eiq 'apache'; then
+        apache_found=1
+    else
+        apache_detect_note="Leidsin käsu apache2, kuid versioonis pole Apache tunnust."
+    fi
 elif command -v httpd >/dev/null 2>&1; then
-    apache_found=1
     apache_version="$(httpd -v 2>/dev/null | head -n1 || true)"
+    if echo "$apache_version" | grep -Eiq 'apache'; then
+        apache_found=1
+    else
+        apache_detect_note="Leidsin käsu httpd, kuid see ei paista olevat Apache HTTP Server."
+    fi
+fi
+
+if [[ "$apache_found" -eq 0 ]] && command -v systemctl >/dev/null 2>&1; then
+    if systemctl status apache2 >/dev/null 2>&1 || systemctl status httpd >/dev/null 2>&1; then
+        apache_found=1
+        apache_detect_note="Apache teenuse unit on olemas (tuvastus systemctl kaudu)."
+    fi
 fi
 
 if [[ "$apache_found" -eq 1 ]]; then
     if [[ -n "$apache_version" ]]; then
         ok "Apache on olemas: $apache_version"
+    elif [[ -n "$apache_detect_note" ]]; then
+        ok "Apache on olemas: $apache_detect_note"
     else
         ok "Apache on olemas."
     fi
 else
-    fail "Apache ei ole leitud (puudub apache2/httpd käsk)."
+    fail "Apache ei ole leitud (ei tuvastatud Apache versiooni ega teenuse unitit)."
+    if [[ -n "$apache_detect_note" ]]; then
+        warn "$apache_detect_note"
+    fi
 fi
 
 apache_service_state="unknown"
@@ -84,23 +105,6 @@ else
     fail "PHP ei ole leitud (puudub php käsk)."
 fi
 
-php_module_found=0
-if command -v apache2ctl >/dev/null 2>&1; then
-    if apache2ctl -M 2>/dev/null | grep -Eiq 'php|php_module'; then
-        php_module_found=1
-    fi
-elif command -v httpd >/dev/null 2>&1; then
-    if httpd -M 2>/dev/null | grep -Eiq 'php|php_module'; then
-        php_module_found=1
-    fi
-fi
-
-if [[ "$php_module_found" -eq 1 ]]; then
-    ok "Apache/PHP sidusmoodul paistab olemas."
-else
-    warn "Apache PHP moodulit ei tuvastatud (võib olla PHP-FPM lahendus)."
-fi
-
 info "3) Kontrollin phpMyAdmin olemasolu..."
 
 phpmyadmin_found=0
@@ -108,8 +112,12 @@ phpmyadmin_path=""
 
 for p in \
     /usr/share/phpmyadmin \
+    /usr/share/phpMyAdmin \
     /var/www/html/phpmyadmin \
+    /var/www/html/phpMyAdmin \
     /var/www/phpmyadmin \
+    /var/www/phpMyAdmin \
+    /etc/phpmyadmin \
     /usr/share/webapps/phpMyAdmin; do
     if [[ -d "$p" ]]; then
         phpmyadmin_found=1
@@ -132,20 +140,6 @@ if [[ "$phpmyadmin_found" -eq 1 ]]; then
     fi
 else
     fail "phpMyAdmini ei leitud (ei kaustast ega paketihaldurist)."
-fi
-
-phpmyadmin_conf_found=0
-for c in /etc/apache2/conf-enabled/phpmyadmin.conf /etc/apache2/conf-available/phpmyadmin.conf /etc/httpd/conf.d/phpMyAdmin.conf; do
-    if [[ -f "$c" ]]; then
-        phpmyadmin_conf_found=1
-        break
-    fi
-done
-
-if [[ "$phpmyadmin_conf_found" -eq 1 ]]; then
-    ok "phpMyAdmin Apache konfiguratsioon on olemas."
-else
-    warn "phpMyAdmin Apache konfiguratsioonifaili ei leitud (võib olla käsitsi seadistatud)."
 fi
 
 echo
