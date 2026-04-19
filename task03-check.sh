@@ -55,13 +55,13 @@ run_sql() {
 }
 
 if ! command -v mariadb >/dev/null 2>&1; then
-    echo -e "${RED}VIGA:${NC} MariaDB kaasku ei leitud (mariadb puudub PATH-is)."
+    echo -e "${RED}VIGA:${NC} MariaDB käsku ei leitud (mariadb puudub PATH-is)."
     exit 1
 fi
 
 if ! run_sql "SELECT 1;" >/dev/null; then
-    echo -e "${RED}VIGA:${NC} MariaDB uhendus ebaonnestus."
-    echo "Vihje: kasuta DB_USER/DB_PASS (ja soovi korral DB_HOST/DB_PORT) voi luba sudo mariadb."
+    echo -e "${RED}VIGA:${NC} MariaDB ühendus ebaõnnestus."
+    echo "Vihje: kasuta DB_USER/DB_PASS (ja soovi korral DB_HOST/DB_PORT) või luba sudo mariadb."
     exit 1
 fi
 
@@ -90,7 +90,7 @@ if [[ "$table_exists" -gt 0 ]]; then
     created_at_col="$(run_sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='backup_lab' AND TABLE_NAME='customers' AND COLUMN_NAME='created_at' AND DATA_TYPE='datetime' AND IS_NULLABLE='NO';" || echo "0")"
 
     if [[ "$id_col" -eq 0 || "$first_name_col" -eq 0 || "$last_name_col" -eq 0 || "$email_col" -eq 0 || "$city_col" -eq 0 || "$created_at_col" -eq 0 ]]; then
-        fail "Tabeli customers veerud ei vasta nouetele (id, first_name, last_name, email, city, created_at)."
+        fail "Tabeli customers veerud ei vasta nõuetele (id, first_name, last_name, email, city, created_at)."
     else
         ok "Tabeli customers struktuur on korrektne."
     fi
@@ -108,68 +108,68 @@ if [[ "$table_exists" -gt 0 ]]; then
 
     null_created_at="$(run_sql "SELECT COUNT(*) FROM backup_lab.customers WHERE created_at IS NULL;" || echo "0")"
     if [[ "$null_created_at" -gt 0 ]]; then
-        fail "Mone kirje created_at on NULL."
+        fail "Mõne kirje created_at on NULL."
     else
-        ok "Kik kirjete created_at vaartused on taisidetud."
+        ok "Kõigi kirjete created_at väärtused on täidetud."
     fi
 fi
 
-info "3) Kontrollin loogilise varukoopiaga..."
+info "3) Kontrollin loogilist varukoopiat..."
 
 logical_backup_file="/tmp/backup_lab.sql"
 if [[ ! -f "$logical_backup_file" ]]; then
-    fail "Loogilise varukoopiaga faili $logical_backup_file ei leitud. Kas tegite 'mariadb-dump backup_lab > /tmp/backup_lab.sql'?"
+    fail "Loogilise varukoopia faili $logical_backup_file ei leitud. Kas tegite 'mariadb-dump backup_lab > /tmp/backup_lab.sql'?"
 else
     file_size=$(stat -f%z "$logical_backup_file" 2>/dev/null || stat -c%s "$logical_backup_file" 2>/dev/null || echo "0")
     if [[ "$file_size" -lt 100 ]]; then
-        fail "Loogilise varukoopiaga fail on liiga vaikse (${file_size} baiti)."
+        fail "Loogilise varukoopia fail on liiga väike (${file_size} baiti)."
     else
-        ok "Loogilise varukoopiaga fail $logical_backup_file eksisteerib (${file_size} baiti)."
+        ok "Loogilise varukoopia fail $logical_backup_file eksisteerib (${file_size} baiti)."
     fi
 
     if grep -q "CREATE TABLE.*customers" "$logical_backup_file"; then
-        ok "Loogilises varukoopiyas leidub CREATE TABLE statement."
+        ok "Loogilises varukoopias leidub CREATE TABLE lause."
     else
-        fail "Loogilises varukoopiyas ei leidunud CREATE TABLE statement."
+        fail "Loogilises varukoopias ei leidunud CREATE TABLE lauset."
     fi
 
     if grep -q "DROP TABLE.*customers" "$logical_backup_file"; then
-        ok "Loogilises varukoopiyas leidub DROP TABLE statement."
+        ok "Loogilises varukoopias leidub DROP TABLE lause."
     else
-        warn "Loogilises varukoopiyas ei leidunud DROP TABLE statement."
+        warn "Loogilises varukoopias ei leidunud DROP TABLE lauset."
     fi
 
     if grep -q "INSERT INTO.*customers" "$logical_backup_file"; then
-        ok "Loogilises varukoopiyas leidub INSERT INTO statement."
+        ok "Loogilises varukoopias leidub INSERT INTO lause."
     else
-        fail "Loogilises varukoopiyas ei leidunud INSERT INTO statement."
+        fail "Loogilises varukoopias ei leidunud INSERT INTO lauset."
     fi
 fi
 
-info "4) Kontrollin füüsilist varukoopiaga..."
+info "4) Kontrollin füüsilist varukoopiat..."
 
 physical_backup_dir="/tmp/physical_backup"
 if [[ ! -d "$physical_backup_dir" ]]; then
-    fail "Füüsilise varukoopiaga kataloogi $physical_backup_dir ei leitud. Kas tegite 'mariadb-backup --backup --target-dir=/tmp/physical_backup'?"
+    fail "Füüsilise varukoopia kataloogi $physical_backup_dir ei leitud. Kas tegite 'mariadb-backup --backup --target-dir=/tmp/physical_backup'?"
 else
-    ok "Füüsilise varukoopiaga kataloog $physical_backup_dir eksisteerib."
+    ok "Füüsilise varukoopia kataloog $physical_backup_dir eksisteerib."
 
     if [[ ! -f "$physical_backup_dir/backup-my.cnf" ]]; then
-        fail "Füüsilises varukoopiyas puudub backup-my.cnf fail."
+        fail "Füüsilises varukoopias puudub backup-my.cnf fail."
     else
-        ok "Füüsilises varukoopiyas leidub backup-my.cnf fail."
+        ok "Füüsilises varukoopias leidub backup-my.cnf fail."
     fi
 
     if [[ ! -f "$physical_backup_dir/xtrabackup_info" ]]; then
-        warn "Füüsilises varukoopiyas puudub xtrabackup_info fail (voi tegemist on erinevate varundus toolidega)."
+        warn "Füüsilises varukoopias puudub xtrabackup_info fail (või tegemist on erinevate varundustööriistadega)."
     else
-        ok "Füüsilises varukoopiyas leidub xtrabackup_info fail."
+        ok "Füüsilises varukoopias leidub xtrabackup_info fail."
     fi
 
     if [[ ! -d "$physical_backup_dir/backup_lab" ]]; then
-        fail "Füüsilises varukoopiyas puudub backup_lab andmebaasi kataloogi."
+        fail "Füüsilises varukoopias puudub backup_lab andmebaasi kataloog."
     else
-        ok "Füüsilises varukoopiyas leidub backup_lab kataloogi."
+        ok "Füüsilises varukoopias leidub backup_lab kataloog."
     fi
 fi
 
@@ -194,12 +194,12 @@ fi
 
 cnf_file="/root/.my.cnf"
 if [[ ! -f "$cnf_file" ]]; then
-    warn "Autentimisinfo faili $cnf_file ei leitud. Fuussiline varundus voi tegemine ei ole toiminud."
+    warn "Autentimisinfo faili $cnf_file ei leitud. Füüsiline varundus või selle tegemine ei ole toiminud."
 else
     ok "Autentimisinfo fail $cnf_file eksisteerib."
 fi
 
-info "6) Kokkuvote varundamisest..."
+info "6) Kokkuvõte varundamisest..."
 
 if [[ -f "$logical_backup_file" ]] && [[ -d "$physical_backup_dir" ]]; then
     ok "Nii loogiline kui ka füüsiline varukoopia on tehtud."
@@ -215,7 +215,7 @@ echo
 echo "Kohustuslikke puudusi: $mandatory_fails"
 
 if [[ "$mandatory_fails" -eq 0 ]]; then
-    ok "Task 03 edukalt labitud."
+    ok "Task 03 edukalt läbitud."
     send_result 3
 else
     echo -e "${RED}Task 03: MITTE ARVESTATUD${NC}"
