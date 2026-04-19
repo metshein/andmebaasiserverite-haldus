@@ -136,7 +136,7 @@ done
 if [[ "$adminer_alias_found" -eq 1 ]]; then
     ok "Admineri veebiserveri konfiguratsioon on olemas."
 else
-    warn "Admineri veebiserveri konfiguratsioonifaili ei leitud (võib olla käsitsi seadistatud või Adminer on otse veebijuures)."
+    info "Admineri veebiserveri konfiguratsioonifaili ei leitud (võib olla käsitsi seadistatud või Adminer on otse veebijuures)."
 fi
 
 echo
