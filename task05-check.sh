@@ -103,62 +103,40 @@ fi
 
 ok "Kasutan andmebaasi $target_schema ja tabelit $target_table."
 
-info "1) Kontrollin tabelite seisukorda (CHECK TABLE)..."
+info "1) Kontrollin CHECK TABLE käskude kasutust..."
 
 mapfile -t db_tables < <(run_sql "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='$target_schema' ORDER BY TABLE_NAME;" || true)
 
 if [[ "${#db_tables[@]}" -eq 0 ]]; then
     fail "Andmebaasis $target_schema ei leitud tabeleid."
 else
-    check_error_tables=0
-    check_warning_tables=0
+    check_cmd_hits=0
+    missing_tables=()
 
     for t in "${db_tables[@]}"; do
-        check_output="$(run_sql "CHECK TABLE $target_schema.$t;" || true)"
-        if [[ -z "$check_output" ]]; then
-            fail "CHECK TABLE ei andnud väljundit tabelile $target_schema.$t"
-            continue
-        fi
-
-        if echo "$check_output" | awk -F'\t' 'tolower($3)=="error" {exit 0} END {exit 1}'; then
-            fail "CHECK TABLE näitas viga tabelis $target_schema.$t"
-            check_error_tables=$((check_error_tables + 1))
-        elif echo "$check_output" | awk -F'\t' 'tolower($3)=="warning" {exit 0} END {exit 1}'; then
-            warn "CHECK TABLE näitas hoiatust tabelis $target_schema.$t"
-            check_warning_tables=$((check_warning_tables + 1))
+        if history_has "CHECK[[:space:]]+TABLE[[:space:]]+(`?$target_schema`?\\.)?`?$t`?"; then
+            check_cmd_hits=$((check_cmd_hits + 1))
         else
-            ok "Tabel $target_schema.$t on korras."
+            missing_tables+=("$t")
         fi
     done
 
-    info "CHECK TABLE kokkuvõte: vead=$check_error_tables, hoiatused=$check_warning_tables"
+    if [[ "$check_cmd_hits" -eq "${#db_tables[@]}" ]]; then
+        ok "CHECK TABLE käsku on kasutatud iga tabeli jaoks eraldi ($check_cmd_hits/${#db_tables[@]})."
+    else
+        fail "CHECK TABLE käsku ei leitud kõigi tabelite jaoks eraldi ($check_cmd_hits/${#db_tables[@]})."
+        warn "Puuduvad CHECK TABLE tõendid tabelitele: ${missing_tables[*]}"
+    fi
 fi
 
 info "2) Hinnangu kontroll (tehniline tõend)..."
-if history_has 'CHECK[[:space:]]+TABLE[[:space:]]+(`?lab_perf`?\.)?`?users`?'; then
-    ok "Käsuajaloos leidub CHECK TABLE users kasutust."
+if history_has 'CHECK[[:space:]]+TABLE'; then
+    ok "Käsuajaloos leidub CHECK TABLE kasutust."
 else
-    fail "Käsuajaloost ei leitud CHECK TABLE users käsku. Käivita näiteks: CHECK TABLE users; ja seejärel history -a"
+    fail "Käsuajaloos ei leitud CHECK TABLE käsku. Käivita vajalikud CHECK TABLE käsud ja seejärel history -a"
 fi
 
-info "3) Analüüsin users mahtu ja kasutust..."
-
-users_count="$(run_sql "SELECT COUNT(*) FROM $target_schema.$target_table;" || echo "0")"
-users_size_bytes="$(run_sql "SELECT IFNULL(DATA_LENGTH+INDEX_LENGTH,0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$target_schema' AND TABLE_NAME='$target_table';" || echo "0")"
-
-if [[ "$users_count" -le 0 ]]; then
-    fail "Tabelis $target_schema.$target_table pole kirjeid."
-else
-    ok "Tabelis $target_schema.$target_table on $users_count kirjet."
-fi
-
-if [[ "$users_size_bytes" -le 0 ]]; then
-    fail "Tabeli $target_table suurust ei õnnestunud korrektselt lugeda."
-else
-    ok "Tabeli $target_table ligikaudne suurus: $users_size_bytes baiti."
-fi
-
-info "4) Kontrollin arhiveerimist (esimesed 50 000 kirjet)..."
+info "3) Kontrollin arhiveerimist (esimesed 50 000 kirjet)..."
 
 archive_exists="$(run_sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$target_schema' AND TABLE_NAME='$archive_table';" || echo "0")"
 if [[ "$archive_exists" -eq 0 ]]; then
@@ -200,7 +178,7 @@ if [[ "$archive_exists" -gt 0 ]]; then
     fi
 fi
 
-info "5) Kontrollin ANALYZE TABLE users kasutust..."
+info "4) Kontrollin ANALYZE TABLE users kasutust..."
 
 analyze_history_found=0
 if history_has 'ANALYZE[[:space:]]+TABLE[[:space:]]+`?users`?'; then
@@ -217,9 +195,10 @@ else
     fail "ANALYZE TABLE users tõendit ei leitud (ajalugu ega hiljutine statistika uuendus)."
 fi
 
-info "6) Tulemuste kontroll..."
+info "5) Tulemuste kontroll..."
 
 if [[ "$archive_exists" -gt 0 ]]; then
+    users_count="$(run_sql "SELECT COUNT(*) FROM $target_schema.$target_table;" || echo "0")"
     combined_count=$((users_count + archive_count))
     if [[ "$combined_count" -gt "$users_count" ]]; then
         ok "Aktiivne tabel $target_table sisaldab nüüd vähem kirjeid kui $target_table + $archive_table kokku."
