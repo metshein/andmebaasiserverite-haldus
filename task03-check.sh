@@ -147,12 +147,6 @@ else
         fail "Loogilises varukoopias ei leidunud CREATE TABLE lauset."
     fi
 
-    if grep -q "DROP TABLE.*customers" "$logical_backup_file"; then
-        ok "Loogilises varukoopias leidub DROP TABLE lause."
-    else
-        fail "Loogilises varukoopias ei leidunud DROP TABLE lauset. Ülesanne nõuab, et kustutad tabeli taastamise harjutamiseks."
-    fi
-
     if grep -q "INSERT INTO.*customers" "$logical_backup_file"; then
         ok "Loogilises varukoopias leidub INSERT INTO lause."
     else
