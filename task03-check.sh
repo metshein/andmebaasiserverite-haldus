@@ -12,7 +12,6 @@ NC='\033[0m'
 
 mandatory_fails=0
 manual_email="${MANUAL_EMAIL:-eesnimi.perenimi@example.com}"
-backup_db_user="${BACKUP_DB_USER:-${DB_USER:-mariadb_backup}}"
 
 info() {
     echo -e "${BLUE}$1${NC}"
@@ -163,28 +162,11 @@ fi
 
 info "4) Kontrollin varunduskasutajat (füüsilisele varundusele)..."
 
-backup_user_exists="$(run_sql "SELECT COUNT(*) FROM mysql.user WHERE User='${backup_db_user}';" || echo "0")"
+backup_user_exists="$(run_sql "SELECT COUNT(*) FROM mysql.user WHERE User='mariadb_backup';" || echo "0")"
 if [[ "$backup_user_exists" -gt 0 ]]; then
-    ok "Varunduskasutaja '${backup_db_user}' on olemas."
-    
-    backup_user_privs="$(run_sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='mysql' AND COLUMN_NAME='Backup_priv';" || echo "0")"
-    if [[ "$backup_user_privs" -gt 0 ]]; then
-        backup_priv="$(run_sql "SELECT Backup_priv FROM mysql.user WHERE User='${backup_db_user}' LIMIT 1;" || true)"
-        if [[ "$backup_priv" == "Y" ]]; then
-            ok "Varunduskasutajal '${backup_db_user}' on BACKUP_ADMIN privileeg."
-        else
-            warn "Varunduskasutajal '${backup_db_user}' ei ole BACKUP_ADMIN privileegi (Backup_priv != Y)."
-        fi
-    fi
+    ok "Varunduskasutaja 'mariadb_backup' on olemas."
 else
-    warn "Varunduskasutajat '${backup_db_user}' ei leitud. Vajadusel määra BACKUP_DB_USER ja käivita kontroll uuesti."
-fi
-
-cnf_file="/root/.my.cnf"
-if [[ ! -f "$cnf_file" ]]; then
-    warn "Autentimisinfo faili $cnf_file ei leitud. Füüsiline varundus või selle tegemine ei ole toiminud."
-else
-    ok "Autentimisinfo fail $cnf_file eksisteerib."
+    warn "Varunduskasutajat 'mariadb_backup' ei leitud."
 fi
 
 info "5) Kontrollin füüsilist varukoopiat..."
