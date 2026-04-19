@@ -73,25 +73,6 @@ else
     fi
 fi
 
-apache_service_state="unknown"
-if command -v systemctl >/dev/null 2>&1; then
-    if systemctl is-active --quiet apache2; then
-        apache_service_state="active (apache2)"
-    elif systemctl is-active --quiet httpd; then
-        apache_service_state="active (httpd)"
-    elif systemctl status apache2 >/dev/null 2>&1 || systemctl status httpd >/dev/null 2>&1; then
-        apache_service_state="installed-but-not-active"
-    fi
-fi
-
-if [[ "$apache_service_state" == active* ]]; then
-    ok "Apache teenus töötab: $apache_service_state"
-elif [[ "$apache_service_state" == "installed-but-not-active" ]]; then
-    warn "Apache on paigaldatud, kuid teenus ei tööta."
-else
-    warn "Apache teenuse olekut ei õnnestunud kinnitada systemctl abil."
-fi
-
 info "2) Kontrollin PHP olemasolu..."
 
 if command -v php >/dev/null 2>&1; then
