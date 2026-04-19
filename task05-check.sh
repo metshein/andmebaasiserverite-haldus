@@ -81,42 +81,53 @@ if ! run_sql "SELECT 1;" >/dev/null; then
     exit 1
 fi
 
-accounts_schema="$(run_sql "SELECT TABLE_SCHEMA FROM information_schema.TABLES WHERE TABLE_NAME='accounts' AND TABLE_SCHEMA NOT IN ('mysql','information_schema','performance_schema','sys') ORDER BY TABLE_SCHEMA LIMIT 1;" || true)"
+target_schema="lab_perf"
+target_table="users"
+archive_table="users_archive"
 
-if [[ -z "$accounts_schema" ]]; then
-    fail "Tabelit accounts ei leitud ühestki kasutaja andmebaasist."
+db_exists="$(run_sql "SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$target_schema';" || echo "0")"
+if [[ "$db_exists" -eq 0 ]]; then
+    fail "Andmebaasi $target_schema ei leitud."
     echo "Kohustuslikke puudusi: $mandatory_fails"
     echo -e "${RED}Task 05: MITTE ARVESTATUD${NC}"
     exit 1
 fi
 
-ok "Leidsin accounts tabeli andmebaasist: $accounts_schema"
+table_exists="$(run_sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$target_schema' AND TABLE_NAME='$target_table';" || echo "0")"
+if [[ "$table_exists" -eq 0 ]]; then
+    fail "Tabelit $target_schema.$target_table ei leitud."
+    echo "Kohustuslikke puudusi: $mandatory_fails"
+    echo -e "${RED}Task 05: MITTE ARVESTATUD${NC}"
+    exit 1
+fi
+
+ok "Kasutan andmebaasi $target_schema ja tabelit $target_table."
 
 info "1) Kontrollin tabelite seisukorda (CHECK TABLE)..."
 
-mapfile -t db_tables < <(run_sql "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='$accounts_schema' ORDER BY TABLE_NAME;" || true)
+mapfile -t db_tables < <(run_sql "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='$target_schema' ORDER BY TABLE_NAME;" || true)
 
 if [[ "${#db_tables[@]}" -eq 0 ]]; then
-    fail "Andmebaasis $accounts_schema ei leitud tabeleid."
+    fail "Andmebaasis $target_schema ei leitud tabeleid."
 else
     check_error_tables=0
     check_warning_tables=0
 
     for t in "${db_tables[@]}"; do
-        check_output="$(run_sql "CHECK TABLE $accounts_schema.$t;" || true)"
+        check_output="$(run_sql "CHECK TABLE $target_schema.$t;" || true)"
         if [[ -z "$check_output" ]]; then
-            fail "CHECK TABLE ei andnud väljundit tabelile $accounts_schema.$t"
+            fail "CHECK TABLE ei andnud väljundit tabelile $target_schema.$t"
             continue
         fi
 
         if echo "$check_output" | awk -F'\t' 'tolower($3)=="error" {exit 0} END {exit 1}'; then
-            fail "CHECK TABLE näitas viga tabelis $accounts_schema.$t"
+            fail "CHECK TABLE näitas viga tabelis $target_schema.$t"
             check_error_tables=$((check_error_tables + 1))
         elif echo "$check_output" | awk -F'\t' 'tolower($3)=="warning" {exit 0} END {exit 1}'; then
-            warn "CHECK TABLE näitas hoiatust tabelis $accounts_schema.$t"
+            warn "CHECK TABLE näitas hoiatust tabelis $target_schema.$t"
             check_warning_tables=$((check_warning_tables + 1))
         else
-            ok "Tabel $accounts_schema.$t on korras."
+            ok "Tabel $target_schema.$t on korras."
         fi
     done
 
@@ -130,48 +141,48 @@ else
     warn "Käsuajaloost ei leitud CHECK TABLE käsku (võis olla tehtud teises sessioonis)."
 fi
 
-info "3) Analüüsin accounts mahtu ja kasutust..."
+info "3) Analüüsin users mahtu ja kasutust..."
 
-accounts_count="$(run_sql "SELECT COUNT(*) FROM $accounts_schema.accounts;" || echo "0")"
-accounts_size_bytes="$(run_sql "SELECT IFNULL(DATA_LENGTH+INDEX_LENGTH,0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$accounts_schema' AND TABLE_NAME='accounts';" || echo "0")"
+users_count="$(run_sql "SELECT COUNT(*) FROM $target_schema.$target_table;" || echo "0")"
+users_size_bytes="$(run_sql "SELECT IFNULL(DATA_LENGTH+INDEX_LENGTH,0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$target_schema' AND TABLE_NAME='$target_table';" || echo "0")"
 
-if [[ "$accounts_count" -le 0 ]]; then
-    fail "Tabelis $accounts_schema.accounts pole kirjeid."
+if [[ "$users_count" -le 0 ]]; then
+    fail "Tabelis $target_schema.$target_table pole kirjeid."
 else
-    ok "Tabelis $accounts_schema.accounts on $accounts_count kirjet."
+    ok "Tabelis $target_schema.$target_table on $users_count kirjet."
 fi
 
-if [[ "$accounts_size_bytes" -le 0 ]]; then
-    fail "Tabeli accounts suurust ei õnnestunud korrektselt lugeda."
+if [[ "$users_size_bytes" -le 0 ]]; then
+    fail "Tabeli $target_table suurust ei õnnestunud korrektselt lugeda."
 else
-    ok "Tabeli accounts ligikaudne suurus: $accounts_size_bytes baiti."
+    ok "Tabeli $target_table ligikaudne suurus: $users_size_bytes baiti."
 fi
 
 info "4) Kontrollin arhiveerimist (esimesed 50 000 kirjet)..."
 
-archive_exists="$(run_sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$accounts_schema' AND TABLE_NAME='accounts_archive';" || echo "0")"
+archive_exists="$(run_sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$target_schema' AND TABLE_NAME='$archive_table';" || echo "0")"
 if [[ "$archive_exists" -eq 0 ]]; then
-    fail "Arhiivitabelit $accounts_schema.accounts_archive ei leitud."
+    fail "Arhiivitabelit $target_schema.$archive_table ei leitud."
 else
-    ok "Arhiivitabel $accounts_schema.accounts_archive on olemas."
+    ok "Arhiivitabel $target_schema.$archive_table on olemas."
 fi
 
 if [[ "$archive_exists" -gt 0 ]]; then
-    accounts_def="$(run_sql "SELECT GROUP_CONCAT(CONCAT(COLUMN_NAME,':',COLUMN_TYPE,':',IS_NULLABLE,':',IFNULL(COLUMN_DEFAULT,'NULL'),':',EXTRA) ORDER BY ORDINAL_POSITION SEPARATOR '|') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$accounts_schema' AND TABLE_NAME='accounts';" || true)"
-    archive_def="$(run_sql "SELECT GROUP_CONCAT(CONCAT(COLUMN_NAME,':',COLUMN_TYPE,':',IS_NULLABLE,':',IFNULL(COLUMN_DEFAULT,'NULL'),':',EXTRA) ORDER BY ORDINAL_POSITION SEPARATOR '|') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$accounts_schema' AND TABLE_NAME='accounts_archive';" || true)"
+    users_def="$(run_sql "SELECT GROUP_CONCAT(CONCAT(COLUMN_NAME,':',COLUMN_TYPE,':',IS_NULLABLE,':',IFNULL(COLUMN_DEFAULT,'NULL'),':',EXTRA) ORDER BY ORDINAL_POSITION SEPARATOR '|') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$target_schema' AND TABLE_NAME='$target_table';" || true)"
+    archive_def="$(run_sql "SELECT GROUP_CONCAT(CONCAT(COLUMN_NAME,':',COLUMN_TYPE,':',IS_NULLABLE,':',IFNULL(COLUMN_DEFAULT,'NULL'),':',EXTRA) ORDER BY ORDINAL_POSITION SEPARATOR '|') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$target_schema' AND TABLE_NAME='$archive_table';" || true)"
 
-    if [[ -z "$accounts_def" || -z "$archive_def" ]]; then
+    if [[ -z "$users_def" || -z "$archive_def" ]]; then
         fail "Tabelite struktuuride võrdlus ebaõnnestus."
-    elif [[ "$accounts_def" == "$archive_def" ]]; then
-        ok "accounts_archive struktuur vastab tabelile accounts."
+    elif [[ "$users_def" == "$archive_def" ]]; then
+        ok "$archive_table struktuur vastab tabelile $target_table."
     else
-        fail "accounts_archive struktuur ei vasta tabelile accounts."
+        fail "$archive_table struktuur ei vasta tabelile $target_table."
     fi
 fi
 
 archive_count="0"
 if [[ "$archive_exists" -gt 0 ]]; then
-    archive_count="$(run_sql "SELECT COUNT(*) FROM $accounts_schema.accounts_archive;" || echo "0")"
+    archive_count="$(run_sql "SELECT COUNT(*) FROM $target_schema.$archive_table;" || echo "0")"
     if [[ "$archive_count" -lt 50000 ]]; then
         fail "Arhiivitabelis on vähem kui 50 000 kirjet (hetkel $archive_count)."
     else
@@ -181,7 +192,7 @@ if [[ "$archive_exists" -gt 0 ]]; then
         fi
     fi
 
-    first_50k_archived="$(run_sql "SELECT COUNT(*) FROM (SELECT id FROM (SELECT id FROM $accounts_schema.accounts_archive UNION ALL SELECT id FROM $accounts_schema.accounts) x ORDER BY id LIMIT 50000) f JOIN $accounts_schema.accounts_archive a USING(id);" || echo "0")"
+    first_50k_archived="$(run_sql "SELECT COUNT(*) FROM (SELECT id FROM (SELECT id FROM $target_schema.$archive_table UNION ALL SELECT id FROM $target_schema.$target_table) x ORDER BY id LIMIT 50000) f JOIN $target_schema.$archive_table a USING(id);" || echo "0")"
     if [[ "$first_50k_archived" -eq 50000 ]]; then
         ok "Esimesed 50 000 id-d paiknevad arhiivitabelis."
     else
@@ -189,46 +200,46 @@ if [[ "$archive_exists" -gt 0 ]]; then
     fi
 fi
 
-info "5) Kontrollin ANALYZE TABLE accounts kasutust..."
+info "5) Kontrollin ANALYZE TABLE users kasutust..."
 
 analyze_history_found=0
-if history_has 'ANALYZE[[:space:]]+TABLE[[:space:]]+`?accounts`?'; then
+if history_has 'ANALYZE[[:space:]]+TABLE[[:space:]]+`?users`?'; then
     analyze_history_found=1
 fi
 
-analyze_recent="$(run_sql "SELECT COUNT(*) FROM mysql.innodb_table_stats WHERE database_name='$accounts_schema' AND table_name='accounts' AND last_update >= NOW() - INTERVAL 1 DAY;" || echo "ERR")"
+analyze_recent="$(run_sql "SELECT COUNT(*) FROM mysql.innodb_table_stats WHERE database_name='$target_schema' AND table_name='$target_table' AND last_update >= NOW() - INTERVAL 1 DAY;" || echo "ERR")"
 
 if [[ "$analyze_history_found" -eq 1 ]]; then
-    ok "Käsuajaloos leidub ANALYZE TABLE accounts kasutust."
+    ok "Käsuajaloos leidub ANALYZE TABLE users kasutust."
 elif [[ "$analyze_recent" != "ERR" && "$analyze_recent" -gt 0 ]]; then
-    ok "InnoDB statistika järgi on accounts tabelit hiljuti uuendatud (ANALYZE tõend olemas)."
+    ok "InnoDB statistika järgi on users tabelit hiljuti uuendatud (ANALYZE tõend olemas)."
 else
-    fail "ANALYZE TABLE accounts tõendit ei leitud (ajalugu ega hiljutine statistika uuendus)."
+    fail "ANALYZE TABLE users tõendit ei leitud (ajalugu ega hiljutine statistika uuendus)."
 fi
 
 info "6) Tulemuste kontroll..."
 
 if [[ "$archive_exists" -gt 0 ]]; then
-    combined_count=$((accounts_count + archive_count))
-    if [[ "$combined_count" -gt "$accounts_count" ]]; then
-        ok "Aktiivne tabel accounts sisaldab nüüd vähem kirjeid kui accounts + accounts_archive kokku."
+    combined_count=$((users_count + archive_count))
+    if [[ "$combined_count" -gt "$users_count" ]]; then
+        ok "Aktiivne tabel $target_table sisaldab nüüd vähem kirjeid kui $target_table + $archive_table kokku."
     else
         fail "Aktiivne tabel ei paista pärast arhiveerimist vähenenud."
     fi
 
-    status_accounts="$(run_sql "CHECK TABLE $accounts_schema.accounts;" || true)"
-    status_archive="$(run_sql "CHECK TABLE $accounts_schema.accounts_archive;" || true)"
+    status_users="$(run_sql "CHECK TABLE $target_schema.$target_table;" || true)"
+    status_archive="$(run_sql "CHECK TABLE $target_schema.$archive_table;" || true)"
 
-    if echo "$status_accounts" | awk -F'\t' 'tolower($3)=="error" {exit 0} END {exit 1}'; then
-        fail "Lõppkontrollis on accounts tabel vigane."
+    if echo "$status_users" | awk -F'\t' 'tolower($3)=="error" {exit 0} END {exit 1}'; then
+        fail "Lõppkontrollis on $target_table tabel vigane."
     else
-        ok "Lõppkontrollis on accounts tabel korras."
+        ok "Lõppkontrollis on $target_table tabel korras."
     fi
 
     if echo "$status_archive" | awk -F'\t' 'tolower($3)=="error" {exit 0} END {exit 1}'; then
-        fail "Lõppkontrollis on accounts_archive tabel vigane."
+        fail "Lõppkontrollis on $archive_table tabel vigane."
     else
-        ok "Lõppkontrollis on accounts_archive tabel korras."
+        ok "Lõppkontrollis on $archive_table tabel korras."
     fi
 fi
 
