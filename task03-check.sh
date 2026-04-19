@@ -174,16 +174,18 @@ else
         ok "Füüsilises varukoopias leidub backup-my.cnf fail."
     fi
 
-    if [[ ! -f "$physical_backup_dir/xtrabackup_info" ]]; then
-        fail "Füüsilises varukoopias puudub xtrabackup_info fail. Ülesandes on nõutud mariadb-backup kasutamine."
+    if [[ -f "$physical_backup_dir/mariadb_backup_info" ]]; then
+        ok "Füüsilises varukoopias leidub mariadb_backup_info fail."
+    elif [[ -f "$physical_backup_dir/xtrabackup_info" ]]; then
+        ok "Füüsilises varukoopias leidub varukoopia infofail."
     else
-        ok "Füüsilises varukoopias leidub xtrabackup_info fail."
+        fail "Füüsilises varukoopias puudub varukoopia infofail. Ülesandes on nõutud mariadb-backup kasutamine."
     fi
 
     if [[ ! -f "$physical_backup_dir/xtrabackup_checkpoints" ]]; then
-        fail "Füüsilises varukoopias puudub xtrabackup_checkpoints fail. See viitab, et mariadb-backup varukoopia ei ole korrektne."
+        fail "Füüsilises varukoopias puudub kontrollpunktide fail. See viitab, et mariadb-backup varukoopia ei ole korrektne."
     else
-        ok "Füüsilises varukoopias leidub xtrabackup_checkpoints fail."
+        ok "Füüsilises varukoopias leidub kontrollpunktide fail."
     fi
 
     if [[ ! -d "$physical_backup_dir/backup_lab" ]]; then
