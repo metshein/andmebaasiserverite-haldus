@@ -11,6 +11,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 mandatory_fails=0
+manual_email="${MANUAL_EMAIL:-eesnimi.perenimi@example.com}"
 
 info() {
     echo -e "${BLUE}$1${NC}"
@@ -101,9 +102,22 @@ info "2) Kontrollin andmete importi..."
 if [[ "$table_exists" -gt 0 ]]; then
     row_count="$(run_sql "SELECT COUNT(*) FROM backup_lab.customers;" || echo "0")"
     if [[ "$row_count" -lt 1000 ]]; then
-        fail "Tabelis customers on alla 1000 kirje (hetkel $row_count). Kas impordisite Mockaroo andmed?"
+        fail "Tabelis customers on alla 1000 kirje (hetkel $row_count). Kas importisite Mockaroo andmed?"
     else
         ok "Tabelis customers on $row_count kirjet."
+    fi
+
+    if [[ "$row_count" -lt 1001 ]]; then
+        fail "Tabelis customers peab olema vähemalt 1001 kirjet (1000 imporditud + vähemalt 1 käsitsi lisatud kirje)."
+    else
+        ok "Tabelis customers on vähemalt 1001 kirjet."
+    fi
+
+    manual_row_count="$(run_sql "SELECT COUNT(*) FROM backup_lab.customers WHERE email='${manual_email}';" || echo "0")"
+    if [[ "$manual_row_count" -gt 0 ]]; then
+        ok "Käsitsi lisatud kirje e-postiga ${manual_email} on olemas."
+    else
+        warn "Käsitsi lisatud kirjet e-postiga ${manual_email} ei leitud. Kui kasutasid teist e-posti, käivita kontroll uuesti: MANUAL_EMAIL='sinu@epost.ee' ./task03-check.sh"
     fi
 
     null_created_at="$(run_sql "SELECT COUNT(*) FROM backup_lab.customers WHERE created_at IS NULL;" || echo "0")"
@@ -209,6 +223,38 @@ elif [[ -d "$physical_backup_dir" ]]; then
     warn "Ainult füüsiline varukoopia on tehtud. Loogiline varukoopia puudub."
 else
     fail "Kumbki varukoopia ei ole tehtud."
+fi
+
+info "7) Kontrollin taastamise lõpptulemust..."
+
+restored_db_exists="$(run_sql "SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='backup_lab';" || echo "0")"
+if [[ "$restored_db_exists" -eq 0 ]]; then
+    fail "Taastamise järel andmebaasi backup_lab ei leitud."
+else
+    ok "Taastamise järel on andmebaas backup_lab olemas."
+fi
+
+restored_table_exists="$(run_sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='backup_lab' AND TABLE_NAME='customers';" || echo "0")"
+if [[ "$restored_table_exists" -eq 0 ]]; then
+    fail "Taastamise järel tabelit backup_lab.customers ei leitud."
+else
+    ok "Taastamise järel on tabel backup_lab.customers olemas."
+fi
+
+if [[ "$restored_table_exists" -gt 0 ]]; then
+    restored_row_count="$(run_sql "SELECT COUNT(*) FROM backup_lab.customers;" || echo "0")"
+    if [[ "$restored_row_count" -lt 1001 ]]; then
+        fail "Taastamise järel on tabelis customers liiga vähe kirjeid (hetkel $restored_row_count, oodatud vähemalt 1001)."
+    else
+        ok "Taastamise järel on tabelis customers vähemalt 1001 kirjet."
+    fi
+
+    restored_manual_row_count="$(run_sql "SELECT COUNT(*) FROM backup_lab.customers WHERE email='${manual_email}';" || echo "0")"
+    if [[ "$restored_manual_row_count" -gt 0 ]]; then
+        ok "Taastamise järel leidub käsitsi lisatud kirje e-postiga ${manual_email}."
+    else
+        warn "Taastamise järel ei leitud kirjet e-postiga ${manual_email}. Kui kasutasid teist e-posti, määra MANUAL_EMAIL ja käivita kontroll uuesti."
+    fi
 fi
 
 echo
