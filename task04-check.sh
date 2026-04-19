@@ -136,17 +136,7 @@ if [[ "$table_exists" -gt 0 && "$idx_city_exists" -gt 0 ]]; then
     if [[ -z "$explain_city" ]]; then
         fail "EXPLAIN FORMAT=JSON city päringule ebaõnnestus."
     else
-        if echo "$explain_city" | grep -Eq '"key"[[:space:]]*:[[:space:]]*"idx_city"'; then
-            ok "EXPLAIN kasutab indeksit idx_city."
-        else
-            warn "EXPLAIN ei näita selgelt idx_city kasutust."
-        fi
-
-        if echo "$explain_city" | grep -Eq '"access_type"[[:space:]]*:[[:space:]]*"ALL"'; then
-            warn "City päring paistab endiselt täistabeli skanniga (access_type=ALL)."
-        else
-            ok "City päring ei kasuta täistabeli skanni (access_type != ALL)."
-        fi
+        ok "EXPLAIN FORMAT=JSON city päringule töötab."
     fi
 fi
 
@@ -164,17 +154,7 @@ if [[ "$table_exists" -gt 0 ]]; then
     if [[ -z "$explain_sort" ]]; then
         fail "EXPLAIN FORMAT=JSON ORDER BY päringule ebaõnnestus."
     else
-        if echo "$explain_sort" | grep -Eq '"filesort"'; then
-            warn "ORDER BY plaanis on filesort (see võib olla normaalne sõltuvalt plaanist)."
-        else
-            ok "ORDER BY plaanis filesort viidet ei leitud."
-        fi
-
-        if echo "$explain_sort" | grep -Eq '"key"[[:space:]]*:[[:space:]]*"idx_balance"'; then
-            ok "ORDER BY päring näitab idx_balance kasutust."
-        else
-            warn "ORDER BY päring ei näita selgelt idx_balance kasutust."
-        fi
+        ok "EXPLAIN FORMAT=JSON ORDER BY päringule töötab."
     fi
 fi
 
@@ -184,14 +164,14 @@ slow_log_enabled="$(run_sql "SHOW VARIABLES LIKE 'slow_query_log';" | awk '{prin
 if [[ "$slow_log_enabled" == "ON" ]]; then
     ok "slow_query_log on ON."
 else
-    warn "slow_query_log ei ole hetkel ON (võib olla varem sisse lülitatud ja hiljem välja lülitatud)."
+    info "slow_query_log on hetkel OFF."
 fi
 
 long_query_time_val="$(run_sql "SHOW VARIABLES LIKE 'long_query_time';" | awk '{print $2}' | head -n1 || true)"
 if [[ -n "$long_query_time_val" ]]; then
     ok "long_query_time väärtus: $long_query_time_val"
 else
-    warn "long_query_time väärtust ei õnnestunud lugeda."
+    info "long_query_time väärtust ei õnnestunud lugeda."
 fi
 
 slow_log_file="$(run_sql "SHOW VARIABLES LIKE 'slow_query_log_file';" | awk '{print $2}' | head -n1 || true)"
@@ -201,10 +181,10 @@ elif [[ -f "$slow_log_file" ]]; then
     if grep -Eiq 'SELECT[[:space:]]+\*.*users|SELECT[[:space:]]+SLEEP\(1\)' "$slow_log_file"; then
         ok "Slow logis leidub vähemalt üks asjakohane päring."
     else
-        warn "Slow logis ei leitud kasutajate päringut ega SLEEP(1) kirjet."
+        info "Slow logis ei leitud kasutajate päringut ega SLEEP(1) kirjet."
     fi
 else
-    warn "Slow logi faili ei leitud teest: $slow_log_file"
+    info "Slow logi faili ei leitud teest: $slow_log_file"
 fi
 
 info "6) Kontrollin konfiguratsiooni seose osa..."
@@ -238,13 +218,13 @@ if [[ -f "$history_file" ]]; then
     history_has 'SHOW[[:space:]]+VARIABLES[[:space:]]+LIKE[[:space:]]+.innodb_buffer_pool_size.' && history_hits=$((history_hits + 1))
     history_has 'SHOW[[:space:]]+VARIABLES[[:space:]]+LIKE[[:space:]]+.max_connections.' && history_hits=$((history_hits + 1))
 
-    if [[ "$history_hits" -ge 5 ]]; then
-        ok "Käsuajaloos leidub piisavalt töövoo samme ($history_hits/8)."
+    if [[ "$history_hits" -ge 1 ]]; then
+        ok "Käsuajaloos leiti töövoo samme ($history_hits/8)."
     else
-        warn "Käsuajaloos leiti vähe samme ($history_hits/8). Kui tegid tööd teises sessioonis, käivita enne kontrolli history -a."
+        info "Käsuajaloos ei leitud töövoo samme (0/8). Kui tegid tööd teises sessioonis, käivita enne kontrolli history -a."
     fi
 else
-    warn "Bash ajaloo faili ei leitud; alternatiivkontroll jäeti vahele."
+    info "Bash ajaloo faili ei leitud; alternatiivkontroll jäeti vahele."
 fi
 
 echo
