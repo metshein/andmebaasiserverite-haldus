@@ -42,6 +42,22 @@ chmod +x *.sh
 ./task01-check.sh
 ```
 
+Kõik olemasolevad kontrollid selles kaustas:
+
+- `task01-check.sh`
+- `task02-check.sh`
+- `task03-check.sh`
+- `task04-check.sh`
+- `task05-check.sh`
+- `task06-check.sh`
+- `task07-check.sh`
+
+Kõigi kontrollide järjest käivitamiseks:
+
+```bash
+./run-all-checks.sh
+```
+
 Kui jooksutad kontrolli teisest masinast (nt Raspberry Pi), kasuta SERVER_URL keskkonnamuutujat:
 
 ```bash
