@@ -135,10 +135,10 @@ else
 fi
 
 info "2) Hinnangu kontroll (tehniline tõend)..."
-if history_has 'CHECK[[:space:]]+TABLE'; then
-    ok "Käsuajaloos leidub CHECK TABLE kasutust."
+if history_has 'CHECK[[:space:]]+TABLE[[:space:]]+(`?lab_perf`?\.)?`?users`?'; then
+    ok "Käsuajaloos leidub CHECK TABLE users kasutust."
 else
-    warn "Käsuajaloost ei leitud CHECK TABLE käsku (võis olla tehtud teises sessioonis)."
+    fail "Käsuajaloost ei leitud CHECK TABLE users käsku. Käivita näiteks: CHECK TABLE users; ja seejärel history -a"
 fi
 
 info "3) Analüüsin users mahtu ja kasutust..."
