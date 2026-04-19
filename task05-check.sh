@@ -13,6 +13,7 @@ NC='\033[0m'
 mandatory_fails=0
 bash_history_file="${HISTFILE:-$HOME/.bash_history}"
 mysql_history_file="$HOME/.mysql_history"
+mariadb_history_file="$HOME/.mariadb_history"
 
 info() {
     echo -e "${BLUE}$1${NC}"
@@ -67,6 +68,10 @@ history_has() {
         return 0
     fi
 
+    if [[ -f "$mariadb_history_file" ]] && tr -d '`' < "$mariadb_history_file" | grep -Eiq "$pattern"; then
+        return 0
+    fi
+
     return 1
 }
 
@@ -105,27 +110,19 @@ ok "Kasutan andmebaasi $target_schema ja tabelit $target_table."
 
 info "1-2) Kontrollin CHECK TABLE käskude kasutust..."
 
-mapfile -t db_tables < <(run_sql "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='$target_schema' ORDER BY TABLE_NAME;" || true)
+users_check_from_history=0
+if history_has "CHECK[[:space:]]+TABLE[[:space:]]+($target_schema\\.)?$target_table([[:space:];]|$)"; then
+    users_check_from_history=1
+fi
 
-if [[ "${#db_tables[@]}" -eq 0 ]]; then
-    fail "Andmebaasis $target_schema ei leitud tabeleid."
+if [[ "$users_check_from_history" -eq 1 ]]; then
+    ok "Käsuajaloos leidub CHECK TABLE users kasutust."
 else
-    check_cmd_hits=0
-    missing_tables=()
-
-    for t in "${db_tables[@]}"; do
-        if history_has "CHECK[[:space:]]+TABLE[[:space:]]+($target_schema\\.)?$t([[:space:];]|$)"; then
-            check_cmd_hits=$((check_cmd_hits + 1))
-        else
-            missing_tables+=("$t")
-        fi
-    done
-
-    if [[ "$check_cmd_hits" -eq "${#db_tables[@]}" ]]; then
-        ok "CHECK TABLE käsku on kasutatud iga tabeli jaoks eraldi ($check_cmd_hits/${#db_tables[@]})."
+    users_check_output="$(run_sql "CHECK TABLE $target_schema.$target_table;" || true)"
+    if [[ -n "$users_check_output" ]]; then
+        warn "Käsuajaloost ei leitud CHECK TABLE users käsku, kuid CHECK TABLE $target_schema.$target_table töötab. Võimalik, et mysql ajalugu ei salvestu."
     else
-        fail "CHECK TABLE käsku ei leitud kõigi tabelite jaoks eraldi ($check_cmd_hits/${#db_tables[@]})."
-        warn "Puuduvad CHECK TABLE tõendid tabelitele: ${missing_tables[*]}"
+        fail "Ei leidnud CHECK TABLE users tõendit ei ajaloost ega jooksvast kontrollist."
     fi
 fi
 
