@@ -12,6 +12,7 @@ NC='\033[0m'
 
 mandatory_fails=0
 manual_email="${MANUAL_EMAIL:-eesnimi.perenimi@example.com}"
+history_file="${HISTFILE:-$HOME/.bash_history}"
 
 info() {
     echo -e "${BLUE}$1${NC}"
@@ -154,16 +155,7 @@ else
     fi
 fi
 
-info "4) Kontrollin varunduskasutajat (füüsilisele varundusele)..."
-
-backup_user_exists="$(run_sql "SELECT COUNT(*) FROM mysql.user WHERE User='mariadb_backup';" || echo "0")"
-if [[ "$backup_user_exists" -gt 0 ]]; then
-    ok "Varunduskasutaja 'mariadb_backup' on olemas."
-else
-    warn "Varunduskasutajat 'mariadb_backup' ei leitud."
-fi
-
-info "5) Kontrollin füüsilist varukoopiat..."
+info "4) Kontrollin füüsilist varukoopiat..."
 
 physical_backup_dir="/tmp/physical_backup"
 if [[ ! -d "$physical_backup_dir" ]]; then
@@ -198,7 +190,7 @@ else
     fi
 fi
 
-info "6) Kokkuvõte varundamisest..."
+info "5) Kokkuvõte varundamisest..."
 
 if [[ -f "$logical_backup_file" ]] && [[ -d "$physical_backup_dir" ]]; then
     ok "Nii loogiline kui ka füüsiline varukoopia on tehtud."
@@ -210,7 +202,100 @@ else
     fail "Kumbki varukoopia ei ole tehtud."
 fi
 
-info "7) Kontrollin taastamise lõpptulemust..."
+info "6) Kontrollin taastamise lõpptulemust..."
+
+if [[ -f "$history_file" ]]; then
+    restore_cmd_score=0
+    stop_cmd_found=0
+    cleanup_cmd_found=0
+    prepare_cmd_found=0
+    copy_back_cmd_found=0
+    chown_cmd_found=0
+    start_cmd_found=0
+
+    grep -Eiq '(sudo[[:space:]]+)?(systemctl[[:space:]]+stop[[:space:]]+mariadb|service[[:space:]]+mariadb[[:space:]]+stop)' "$history_file" && stop_cmd_found=1
+    grep -Eiq '(rm[[:space:]]+-rf[[:space:]]+/var/lib/mysql/\*|mv[[:space:]]+/var/lib/mysql[[:space:]]+/var/mariadb/backup/orig-[0-9]{8}|mv[[:space:]]+/var/lib/mysql[[:space:]]+/var/mariadb/backup/orig)' "$history_file" && cleanup_cmd_found=1
+    grep -Eiq 'mariadb-backup.*--prepare' "$history_file" && prepare_cmd_found=1
+    grep -Eiq 'mariadb-backup.*--copy-back' "$history_file" && copy_back_cmd_found=1
+    grep -Eiq 'chown[[:space:]]+-R[[:space:]]+mysql:mysql[[:space:]]+/var/lib/mysql/?' "$history_file" && chown_cmd_found=1
+    grep -Eiq '(sudo[[:space:]]+)?(systemctl[[:space:]]+(start|restart)[[:space:]]+mariadb|service[[:space:]]+mariadb[[:space:]]+(start|restart))' "$history_file" && start_cmd_found=1
+
+    if [[ "$stop_cmd_found" -eq 1 ]]; then
+        ok "Leidsin MariaDB peatamise käsu."
+        restore_cmd_score=$((restore_cmd_score + 1))
+    else
+        warn "Ei leidnud selget MariaDB peatamise käsku ajaloost."
+    fi
+
+    if [[ "$cleanup_cmd_found" -eq 1 ]]; then
+        ok "Leidsin andmekataloogi puhastamise/teisaldamise käsu."
+        restore_cmd_score=$((restore_cmd_score + 1))
+    else
+        warn "Ei leidnud andmekataloogi puhastamise/teisaldamise käsku ajaloost."
+    fi
+
+    if [[ "$prepare_cmd_found" -eq 1 ]]; then
+        ok "Leidsin prepare käsu."
+        restore_cmd_score=$((restore_cmd_score + 1))
+    else
+        warn "Ei leidnud prepare käsku ajaloost."
+    fi
+
+    if [[ "$copy_back_cmd_found" -eq 1 ]]; then
+        ok "Leidsin copy-back käsu."
+        restore_cmd_score=$((restore_cmd_score + 1))
+    else
+        warn "Ei leidnud copy-back käsku ajaloost."
+    fi
+
+    if [[ "$chown_cmd_found" -eq 1 ]]; then
+        ok "Leidsin omandiõiguste parandamise käsu (chown)."
+        restore_cmd_score=$((restore_cmd_score + 1))
+    else
+        warn "Ei leidnud chown käsku ajaloost."
+    fi
+
+    if [[ "$start_cmd_found" -eq 1 ]]; then
+        ok "Leidsin MariaDB käivitamise käsu (start/restart)."
+        restore_cmd_score=$((restore_cmd_score + 1))
+    else
+        warn "Ei leidnud MariaDB käivitamise käsku ajaloost."
+    fi
+
+    if [[ "$restore_cmd_score" -ge 4 ]]; then
+        ok "Taastamise käsuajaloo tõendus on piisav ($restore_cmd_score/6)."
+    else
+        warn "Taastamise käsuajaloo tõendus on nõrk ($restore_cmd_score/6). Kontrollin edasi süsteemi ja andmete seisu."
+    fi
+else
+    warn "Bash ajaloo faili ei leitud; taastamise käske ei saanud kontrollida."
+fi
+
+mariadb_running="$(systemctl is-active mariadb 2>/dev/null || echo "unknown")"
+if [[ "$mariadb_running" == "active" ]]; then
+    ok "MariaDB teenus töötab (systemctl is-active = active)."
+else
+    fail "MariaDB teenus ei ole aktiivne (status: $mariadb_running)."
+fi
+
+if [[ -d "/var/lib/mysql" ]] && [[ -n "$(ls -A /var/lib/mysql 2>/dev/null)" ]]; then
+    ok "/var/lib/mysql ei ole tühi."
+else
+    fail "/var/lib/mysql on tühi või puudub."
+fi
+
+mysql_owner="$(stat -c '%U:%G' /var/lib/mysql 2>/dev/null || echo "unknown")"
+if [[ "$mysql_owner" == "mysql:mysql" ]]; then
+    ok "Õigused on korras (/var/lib/mysql omanik: $mysql_owner)."
+else
+    warn "Omanik ei ole mysql:mysql (hetkel: $mysql_owner)."
+fi
+
+if grep -qi "completed ok" "$physical_backup_dir"/* 2>/dev/null; then
+    ok "Prepare jälg leitud (completed ok)."
+else
+    warn "Prepare jälge (completed ok) ei leitud varukoopia failidest."
+fi
 
 restored_db_exists="$(run_sql "SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='backup_lab';" || echo "0")"
 if [[ "$restored_db_exists" -eq 0 ]]; then
