@@ -182,10 +182,10 @@ else
         fail "Füüsilises varukoopias puudub varukoopia infofail. Ülesandes on nõutud mariadb-backup kasutamine."
     fi
 
-    if [[ ! -f "$physical_backup_dir/xtrabackup_checkpoints" ]]; then
-        fail "Füüsilises varukoopias puudub kontrollpunktide fail. See viitab, et mariadb-backup varukoopia ei ole korrektne."
-    else
+    if [[ -f "$physical_backup_dir/xtrabackup_checkpoints" ]] || [[ -f "$physical_backup_dir/mariadb_backup_checkpoints" ]]; then
         ok "Füüsilises varukoopias leidub kontrollpunktide fail."
+    else
+        fail "Füüsilises varukoopias puudub kontrollpunktide fail. Veendu, et varunduskäsk lõppes teatega 'completed OK!' ja et --target-dir osutab õigele kataloogile."
     fi
 
     if [[ ! -d "$physical_backup_dir/backup_lab" ]]; then
