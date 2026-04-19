@@ -206,6 +206,17 @@ info "6) Kontrollin taastamise lõpptulemust..."
 
 if [[ -f "$history_file" ]]; then
     restore_cmd_score=0
+    history_scope=""
+    backup_anchor_line="$(grep -Ein 'mariadb-backup.*(--backup.*--target-dir=/tmp/physical_backup|--target-dir=/tmp/physical_backup.*--backup)' "$history_file" | tail -n1 | cut -d: -f1 || true)"
+
+    if [[ -n "$backup_anchor_line" ]]; then
+        history_scope="$(tail -n +"$backup_anchor_line" "$history_file")"
+        ok "Taastamise käske kontrollin alates viimasest füüsilise varukoopia käsust."
+    else
+        history_scope="$(tail -n 300 "$history_file")"
+        warn "Viimase füüsilise varukoopia käsu ankrut ei leidnud; kontrollin viimase 300 käsu ulatuses."
+    fi
+
     stop_cmd_found=0
     cleanup_cmd_found=0
     prepare_cmd_found=0
@@ -213,12 +224,12 @@ if [[ -f "$history_file" ]]; then
     chown_cmd_found=0
     start_cmd_found=0
 
-    grep -Eiq '(sudo[[:space:]]+)?(systemctl[[:space:]]+stop[[:space:]]+mariadb|service[[:space:]]+mariadb[[:space:]]+stop)' "$history_file" && stop_cmd_found=1
-    grep -Eiq '(rm[[:space:]]+-rf[[:space:]]+/var/lib/mysql/\*|mv[[:space:]]+/var/lib/mysql[[:space:]]+/var/mariadb/backup/orig-[0-9]{8}|mv[[:space:]]+/var/lib/mysql[[:space:]]+/var/mariadb/backup/orig)' "$history_file" && cleanup_cmd_found=1
-    grep -Eiq 'mariadb-backup.*--prepare' "$history_file" && prepare_cmd_found=1
-    grep -Eiq 'mariadb-backup.*--copy-back' "$history_file" && copy_back_cmd_found=1
-    grep -Eiq 'chown[[:space:]]+-R[[:space:]]+mysql:mysql[[:space:]]+/var/lib/mysql/?' "$history_file" && chown_cmd_found=1
-    grep -Eiq '(sudo[[:space:]]+)?(systemctl[[:space:]]+(start|restart)[[:space:]]+mariadb|service[[:space:]]+mariadb[[:space:]]+(start|restart))' "$history_file" && start_cmd_found=1
+    grep -Eiq '(sudo[[:space:]]+)?(systemctl[[:space:]]+stop[[:space:]]+mariadb|service[[:space:]]+mariadb[[:space:]]+stop)' <<< "$history_scope" && stop_cmd_found=1
+    grep -Eiq '(rm[[:space:]]+-rf[[:space:]]+/var/lib/mysql/\*|mv[[:space:]]+/var/lib/mysql[[:space:]]+/var/mariadb/backup/orig-[0-9]{8}|mv[[:space:]]+/var/lib/mysql[[:space:]]+/var/mariadb/backup/orig)' <<< "$history_scope" && cleanup_cmd_found=1
+    grep -Eiq 'mariadb-backup.*--prepare' <<< "$history_scope" && prepare_cmd_found=1
+    grep -Eiq 'mariadb-backup.*--copy-back' <<< "$history_scope" && copy_back_cmd_found=1
+    grep -Eiq 'chown[[:space:]]+-R[[:space:]]+mysql:mysql[[:space:]]+/var/lib/mysql/?' <<< "$history_scope" && chown_cmd_found=1
+    grep -Eiq '(sudo[[:space:]]+)?(systemctl[[:space:]]+(start|restart)[[:space:]]+mariadb|service[[:space:]]+mariadb[[:space:]]+(start|restart))' <<< "$history_scope" && start_cmd_found=1
 
     if [[ "$stop_cmd_found" -eq 1 ]]; then
         ok "Leidsin MariaDB peatamise käsu."
@@ -238,14 +249,14 @@ if [[ -f "$history_file" ]]; then
         ok "Leidsin prepare käsu."
         restore_cmd_score=$((restore_cmd_score + 1))
     else
-        warn "Ei leidnud prepare käsku ajaloost."
+        fail "Ei leidnud prepare käsku pärast viimast füüsilist varukoopiat."
     fi
 
     if [[ "$copy_back_cmd_found" -eq 1 ]]; then
         ok "Leidsin copy-back käsu."
         restore_cmd_score=$((restore_cmd_score + 1))
     else
-        warn "Ei leidnud copy-back käsku ajaloost."
+        fail "Ei leidnud copy-back käsku pärast viimast füüsilist varukoopiat."
     fi
 
     if [[ "$chown_cmd_found" -eq 1 ]]; then
@@ -265,7 +276,7 @@ if [[ -f "$history_file" ]]; then
     if [[ "$restore_cmd_score" -ge 4 ]]; then
         ok "Taastamise käsuajaloo tõendus on piisav ($restore_cmd_score/6)."
     else
-        warn "Taastamise käsuajaloo tõendus on nõrk ($restore_cmd_score/6). Kontrollin edasi süsteemi ja andmete seisu."
+        fail "Taastamise käsuajaloo tõendus on liiga nõrk ($restore_cmd_score/6)."
     fi
 else
     warn "Bash ajaloo faili ei leitud; taastamise käske ei saanud kontrollida."
