@@ -26,7 +26,7 @@ sudo pacman -S git
 ## Samm 2: Lae alla skriptid
 
 ```bash
-git clone https://github.com/metshein/bash
+git clone https://github.com/metshein/andmebaasiserverite-haldus
 cd bash/db_haldus
 ```
 
